@@ -70,7 +70,8 @@ class TestStreamChat:
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = mock_chunks
 
-        result = list(stream_chat(mock_client, [{"role": "user", "content": "hi"}]))
+        messages = [{"role": "user", "content": "hi"}]
+        result = list(stream_chat(mock_client, messages))
         assert result == ["你好", "世界"]
 
     def test_skips_usage_chunks(self):
@@ -86,33 +87,23 @@ class TestStreamChat:
         result = list(stream_chat(mock_client, [{"role": "user", "content": "hi"}]))
         assert result == ["回复"]
 
-    def test_includes_system_prompt(self):
-        """系统提示词应包含在请求中"""
+    def test_passes_messages_as_is(self):
+        """传入的消息列表应原样发送"""
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = []
 
-        list(
-            stream_chat(mock_client, [{"role": "user", "content": "hi"}], system_prompt="你是助手")
-        )
+        sent = [
+            {"role": "system", "content": "你是助手"},
+            {"role": "user", "content": "hi"},
+        ]
+        list(stream_chat(mock_client, sent))
 
         call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs[1]["messages"]
-        assert messages[0]["role"] == "system"
-        assert messages[0]["content"] == "你是助手"
+        assert messages == sent
 
-    def test_empty_system_prompt_skipped(self):
-        """空系统提示词不应包含在请求中"""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = []
-
-        list(stream_chat(mock_client, [{"role": "user", "content": "hi"}], system_prompt="   "))
-
-        call_kwargs = mock_client.chat.completions.create.call_args
-        messages = call_kwargs[1]["messages"]
-        assert all(m["role"] != "system" for m in messages)
-
-    def test_stream_is_enabled(self):
-        """请求应启用流式模式"""
+    def test_stream_and_model_params(self):
+        """请求应启用流式并使用指定模型"""
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = []
 

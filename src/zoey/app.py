@@ -101,13 +101,14 @@ def on_page_load(storage_data: str, current_id_data: str, prompt_data: str) -> t
 
     current_conv = _find_conv(conversations, current_id)
     messages = current_conv["messages"] if current_conv else []
+    current_title = current_conv["title"] if current_conv else ""
 
     return (
         conversations,
         current_id,
         system_prompt,
         messages,
-        gr.Radio(choices=_conv_titles(conversations), value=current_id),
+        gr.Radio(choices=_conv_titles(conversations), value=current_title),
     )
 
 
@@ -120,20 +121,18 @@ def on_new_conversation(conversations: list[dict], current_id: str, system_promp
     return (
         conversations,
         current_id,
-        titles,
+        gr.Radio(choices=titles, value=conv["title"]),
         [],
-        gr.Radio(choices=titles, value=current_id),
         "",
         "就绪",
         _serialize(conversations),
     )
 
 
-def on_switch_conversation(conversations: list[dict], evt: gr.SelectData) -> tuple:
+def on_switch_conversation(conversations: list[dict], value: str) -> tuple:
     """切换会话"""
-    selected_title = evt.value
     for c in conversations:
-        if c["title"] == selected_title:
+        if c["title"] == value:
             return (c["id"], c["messages"], "", "就绪")
     return ("", [], "", "就绪")
 
@@ -159,10 +158,9 @@ def on_delete_conversation(conversations: list[dict], current_id: str) -> tuple:
     return (
         conversations,
         current_id,
-        titles,
         messages,
         "",
-        gr.Radio(choices=titles, value=current_id),
+        gr.Radio(choices=titles, value=current_conv["title"] if current_conv else ""),
         "已删除",
         _serialize(conversations),
     )
@@ -173,7 +171,6 @@ def _empty_state() -> tuple:
     return (
         [],
         "",
-        [],
         [],
         "",
         gr.Radio(choices=[], value=None),
@@ -186,9 +183,16 @@ def on_user_message(conversations: list[dict], current_id: str, message: dict) -
     """用户提交消息"""
     current_conv = _find_conv(conversations, current_id)
     if not current_conv:
-        return (conversations, [], "", "就绪", _serialize(conversations))
+        return (
+            conversations,
+            gr.Radio(choices=_conv_titles(conversations), value=None),
+            [],
+            gr.MultimodalTextbox(value=None, interactive=True),
+            _serialize(conversations),
+        )
 
-    for file_path in message.get("files", []):
+    for file_data in message.get("files", []):
+        file_path = file_data.path if hasattr(file_data, "path") else str(file_data)
         current_conv["messages"].append({"role": "user", "content": (file_path,)})
 
     if message.get("text") and message["text"].strip():
@@ -201,14 +205,13 @@ def on_user_message(conversations: list[dict], current_id: str, message: dict) -
             current_conv["title"] = new_title
 
     current_conv["updated_at"] = datetime.now().isoformat()
+    conv_title = current_conv["title"]
     titles = _conv_titles(conversations)
 
     return (
         conversations,
-        titles,
+        gr.Radio(choices=titles, value=conv_title),
         current_conv["messages"],
-        "",
-        gr.Radio(choices=titles, value=current_id),
         gr.MultimodalTextbox(value=None, interactive=True),
         _serialize(conversations),
     )
@@ -242,7 +245,7 @@ def on_submit(conversations: list[dict], current_id: str, system_prompt: str) ->
         current_conv["messages"].append({"role": "assistant", "content": ""})
 
         response_text = ""
-        for text_chunk in stream_chat(client, api_messages, system_prompt):
+        for text_chunk in stream_chat(client, api_messages):
             response_text += text_chunk
             current_conv["messages"][-1]["content"] = response_text
             yield (
@@ -270,7 +273,12 @@ def on_preset_question(conversations: list[dict], current_id: str, question: str
     """预设问题"""
     current_conv = _find_conv(conversations, current_id)
     if not current_conv:
-        return (conversations, [], "", "就绪", _serialize(conversations))
+        return (
+            conversations,
+            gr.Radio(choices=_conv_titles(conversations), value=None),
+            [],
+            _serialize(conversations),
+        )
 
     current_conv["messages"].append({"role": "user", "content": question})
 
@@ -279,12 +287,12 @@ def on_preset_question(conversations: list[dict], current_id: str, question: str
 
     current_conv["updated_at"] = datetime.now().isoformat()
     titles = _conv_titles(conversations)
+    conv_title = current_conv["title"]
 
     return (
         conversations,
-        titles,
+        gr.Radio(choices=titles, value=conv_title),
         current_conv["messages"],
-        gr.Radio(choices=titles, value=current_id),
         _serialize(conversations),
     )
 
@@ -405,9 +413,8 @@ def create_ui() -> gr.Blocks:
             outputs=[
                 conversations_state,
                 current_id_state,
-                gr.Dataset(visible=False),
-                chatbot,
                 conv_radio,
+                chatbot,
                 chat_input,
                 status_text,
                 storage_bridge,
@@ -417,7 +424,7 @@ def create_ui() -> gr.Blocks:
         # 切换对话
         conv_radio.change(
             fn=on_switch_conversation,
-            inputs=[conversations_state],
+            inputs=[conversations_state, conv_radio],
             outputs=[current_id_state, chatbot, chat_input, status_text],
         )
 
@@ -428,7 +435,6 @@ def create_ui() -> gr.Blocks:
             outputs=[
                 conversations_state,
                 current_id_state,
-                gr.Dataset(visible=False),
                 chatbot,
                 chat_input,
                 conv_radio,
@@ -450,9 +456,8 @@ def create_ui() -> gr.Blocks:
             inputs=[conversations_state, current_id_state, chat_input],
             outputs=[
                 conversations_state,
-                gr.Dataset(visible=False),
-                chatbot,
                 conv_radio,
+                chatbot,
                 chat_input,
                 storage_bridge,
             ],
@@ -482,9 +487,8 @@ def create_ui() -> gr.Blocks:
                 inputs=[conversations_state, current_id_state, gr.State(question)],
                 outputs=[
                     conversations_state,
-                    gr.Dataset(visible=False),
-                    chatbot,
                     conv_radio,
+                    chatbot,
                     storage_bridge,
                 ],
             ).then(
@@ -499,6 +503,17 @@ def create_ui() -> gr.Blocks:
 # ── 启动 ──
 
 
+def _find_port(start: int = 7860, max_attempts: int = 10) -> int:
+    """查找可用端口"""
+    import socket as _socket
+
+    for port in range(start, start + max_attempts):
+        with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+    raise RuntimeError(f"在 {start}~{start + max_attempts - 1} 范围内找不到可用端口")
+
+
 def main() -> None:
     """启动应用"""
     print("=" * 50)
@@ -506,14 +521,15 @@ def main() -> None:
     print("=" * 50)
 
     block = create_ui()
+    port = _find_port()
     local_ip = socket.gethostbyname(socket.gethostname())
-    print("\n[本地]  http://127.0.0.1:7860")
-    print(f"[局域网] http://{local_ip}:7860")
+    print(f"\n[本地]  http://127.0.0.1:{port}")
+    print(f"[局域网] http://{local_ip}:{port}")
     print("=" * 50)
 
     block.launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=port,
         share=False,
         show_error=True,
     )

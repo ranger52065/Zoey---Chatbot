@@ -24,14 +24,12 @@ def create_client() -> OpenAI:
 def stream_chat(
     client: OpenAI,
     messages: list[dict],
-    system_prompt: str | None = None,
 ) -> Generator[str, None, None]:
     """发送消息并流式获取回复
 
     Args:
         client: OpenAI 客户端实例
-        messages: OpenAI 兼容的消息列表
-        system_prompt: 可选系统提示词
+        messages: 完整的 API 消息列表（含 system prompt 和 user content）
 
     Yields:
         文本增量片段
@@ -43,20 +41,10 @@ def stream_chat(
     """
     api_params: dict = {
         "model": "qwen3.5-omni-plus-2026-03-15",
-        "messages": [],
+        "messages": messages,
         "stream": True,
         "stream_options": {"include_usage": True},
     }
-
-    if system_prompt and system_prompt.strip():
-        api_params["messages"].append(
-            {
-                "role": "system",
-                "content": system_prompt.strip(),
-            }
-        )
-
-    api_params["messages"].append({"role": "user", "content": messages})
 
     completion = client.chat.completions.create(**api_params)
 
