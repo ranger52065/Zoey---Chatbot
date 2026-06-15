@@ -79,7 +79,10 @@ def _format_error(error: Exception) -> str:
         return "请求超时，请检查网络连接"
     if "rate" in text or "limit" in text:
         return "请求过于频繁，请稍后重试"
-    return str(error)
+    if "audio" in text or "modality" in text:
+        return "该模型不支持音频输入，已自动转为文字处理"
+    # 返回原始错误便于排查
+    return f"{str(error)[:200]}"
 
 
 # ── 事件处理 ──────────────────────────────────
