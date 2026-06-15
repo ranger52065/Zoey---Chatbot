@@ -230,24 +230,6 @@ def on_submit(conversations: list[dict], current_id: str, system_prompt: str) ->
         yield (conversations, [], "就绪", _serialize(conversations))
         return
 
-    # 检查当前模型是否支持音频
-    from zoey.core.processor import AUDIO_EXTENSIONS
-    has_audio = any(
-        isinstance(m.get("content"), tuple)
-        and str(m["content"][0]).lower().endswith(AUDIO_EXTENSIONS)
-        for m in current_conv["messages"]
-    )
-    if has_audio:
-        error_msg = "⚠️ 当前模型不支持音频输入，后续将接入语音转文字功能"
-        current_conv["messages"].append({"role": "assistant", "content": error_msg})
-        yield (
-            conversations,
-            current_conv["messages"],
-            "就绪",
-            _serialize(conversations),
-        )
-        return
-
     api_messages = build_api_messages(current_conv, system_prompt)
     if api_messages is None:
         yield (
