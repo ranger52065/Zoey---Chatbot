@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目简介
 
-Zoey 是一个基于阿里云 DashScope API（通义千问）的多模态 AI 对话助手，使用 Gradio 构建 Web 界面，通过 OpenAI 兼容 SDK 调用模型，支持文字、图片、音频输入。
+Zoey 是一个基于阿里云 DashScope API 的多模态 AI 对话助手，使用 Gradio 构建 Web 界面，通过 OpenAI 兼容 SDK 调用模型，支持文字、图片、音频输入。
 
 ## 常用命令
 
@@ -13,81 +13,83 @@ Zoey 是一个基于阿里云 DashScope API（通义千问）的多模态 AI 对
 .venv\Scripts\activate
 
 # 启动应用
-python Zoey/Zoey.py
-# 或: start.bat
+python -m zoey
 
 # 代码检查
-ruff check Zoey/
+ruff check src/
 
 # 自动修复
-ruff check --fix Zoey/
+ruff check --fix src/
 
 # 代码格式化
-ruff format Zoey/
+ruff format src/
+
+# 运行测试
+python -m pytest tests/ -v
+
+# 运行测试（带覆盖率）
+python -m pytest tests/ --cov=zoey
 
 # 安装依赖
-pip install -r successful_requirements.txt
-```
-
-**测试：** 目前尚无 `tests/` 目录。后续添加测试后可参考以下命令：
-
-```bash
-pytest tests/ -v
-pytest tests/test_file.py::test_func -v
+pip install -e ".[dev]"
 ```
 
 ## 架构说明
 
-### 单文件应用（`Zoey/Zoey.py`，约 585 行）
+### 分层架构（src/zoey/）
 
-核心流程：**UI 事件 → 消息处理 → API 调用 → 流式响应**。
+```
+app.py           UI 组件、事件绑定、localStorage 操作
+  ├── core/message.py    会话 CRUD、消息构建、输入约束校验
+  │     └── core/processor.py   图片/音频 → base64（含文件大小限制）
+  └── api/client.py      DashScope API 通信（固定模型，流式回复）
+```
 
-### 模块职责
-
-| 文件 | 职责 |
-|---|---|
-| `Zoey/Zoey.py` | 主应用：UI 界面、消息处理、API 集成 |
-| `env_utils.py` | 通过 python-dotenv 从 `.env` 加载 `DASHSCOPE_API_KEY` |
-
-### 数据流
+### 核心数据流
 
 1. **用户输入**：`gr.MultimodalTextbox` 收集文字 + 文件
-2. **`add_message()`**：将用户内容追加到历史记录，格式为 `{"role": "user", "content": <str 或 tuple>}`。文件上传以 `(file_path,)` 元组形式暂存
-3. **`build_content()`**：将历史记录转换为 API 兼容的内容列表。根据文件扩展名分发处理：
-   - 图片 → `process_image()`（base64 编码，RGBA→RGB 转换，超过 1024px 缩放到 1024px）
-   - 音频 → `process_audio()`（base64 编码，超过 25MB 时发出警告）
-   - 视频 → 文字占位 `[上传视频: filename]`
-4. **`submit_messages()`**：调用 `client.chat.completions.create()`（流式模式），每收到一个 chunk 就 `yield` 更新后的历史记录，Gradio 逐步更新界面
-5. **`qwen-omni-turbo` 限制校验**：API 调用前检查——不支持多图、不支持多音频、不支持图+音混合输入
+2. **`on_user_message()`**：将消息追加到当前会话，自动生成标题
+3. **`on_submit()`** → `build_api_messages()` → 校验约束 → `stream_chat()`：调用 API 流式获取回复
+4. 每次变化同步到 `localStorage`（`zoey_v2_conversations`、`zoey_v2_current_id`、`zoey_v2_system_prompt`）
+
+### 多会话管理
+
+- 侧边栏 `conv_radio` 列出所有会话标题，点击切换
+- 新建按钮创建空会话，自动生成标题（取首条用户消息前20字）
+- 删除按钮二步确认：第一次变红"确认删除？"，第二次执行删除
+- 所有会话持久化在浏览器 localStorage，刷新不丢
+
+### 关键模式
+
+- **流式响应**：`stream_chat()` 是生成器，yield 文本增量，`on_submit()` 逐段更新 chatbot
+- **会话格式**：`{"id", "title", "messages": [{"role", "content"}, ...], "created_at", "updated_at"}`
+- **文件处理**：图片（RGBA→RGB，缩放 ≤1024px），音频（data URL 前缀格式）
+- **懒加载客户端**：`_get_client()` 首次调用时创建 OpenAI 客户端
 
 ### UI 结构（Gradio Blocks）
 
 ```
 Row
-├── Column(scale=3): Chatbot, MultimodalTextbox, 清除/导出按钮
-└── Column(scale=1): 模型选择器, 语音回复开关, 系统提示词, 快捷问题
+├── Column(scale=1, min_width=260): 侧边栏
+│   ├── Button "＋ 新对话"
+│   ├── Radio 对话列表
+│   ├── Button "🗑 删除当前对话"
+│   ├── Textbox 系统提示词
+│   └── Markdown 快捷问题 + Buttons
+└── Column(scale=3): 聊天区
+    ├── Chatbot
+    ├── MultimodalTextbox
+    └── Textbox 状态栏
 ```
 
-事件链式绑定：`chat_input.submit(add_message).then(submit_messages).then(update_status)`
+### 音频输入踩坑记录
 
-### 模型支持
-
-| 模型 | 语音输出 | 说明 |
-|---|---|---|
-| `qwen-turbo` | 否 | 最快，日常对话 |
-| `qwen-plus` | 否 | 均衡，通用场景 |
-| `qwen-max` | 否 | 深度推理 |
-| `qwen-omni-turbo` | 是 | 支持多模态输入，单文件约束 |
-
-### 关键模式
-
-- **流式响应**：`submit_messages()` 是生成器函数，每收到一个增量 chunk 就 `yield` 完整历史记录。`enable_audio=True` 时，音频数据随 chunk 的 `delta.audio` 到达，保存为 `response_audio.wav`
-- **历史记录格式**：`[{"role": "user"|"assistant", "content": str}, ...]`
-- **端口选择**：`find_available_port()` 从 7860 开始尝试最多 10 个端口
-- **导出功能**：`export_history()` 将纯文字消息序列化为 JSON 文件，保存到 `Zoey/chat_history_<timestamp>.json`
+DashScope 的 `input_audio` 格式和 OpenAI 标准不同：
+- `data` 字段需要 `data:audio/wav;base64,...` 前缀（data URL 格式），不是纯 base64
+- 模型名 `qwen3.5-omni-plus-2026-03-15` 支持多模态
 
 ### 注意事项
 
 - `.env` 文件包含 API 密钥——已加入 `.gitignore`，切勿提交
-- `opencode.json` 包含 DashScope WebParser 和 SpeechToText 的 MCP 配置
-- `successful_requirements.txt` 编码有特殊字符，直接用于 pip 安装即可，无需手动修改
+- `pyproject.toml` 配置了 ruff、pytest、coverage（核心模块 ≥ 80%）
+- Hugging Face Spaces 部署配置在 `.spaces/README.md`
