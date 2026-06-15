@@ -457,7 +457,7 @@ def create_ui() -> gr.Blocks:
             outputs=[current_id_state, storage_current_id, chatbot, chat_input, status_text],
         )
 
-        # 删除对话
+        # 删除对话（点击直接删除）
         delete_btn.click(
             fn=on_delete_conversation,
             inputs=[conversations_state, current_id_state],
@@ -471,13 +471,6 @@ def create_ui() -> gr.Blocks:
                 status_text,
                 storage_bridge,
             ],
-            js="""
-            () => {
-                if (!confirm('确定要删除当前对话吗？此操作不可撤回。')) {
-                    return null;
-                }
-            }
-            """,
         )
 
         # 提交消息
