@@ -332,28 +332,6 @@ def create_ui() -> gr.Blocks:
         storage_current_id = gr.Textbox(visible=False)
         storage_prompt = gr.Textbox(visible=False)
 
-        # ── 页面加载 ──
-        block.load(
-            fn=on_page_load,
-            inputs=[storage_bridge, storage_current_id, storage_prompt],
-            outputs=[
-                conversations_state,
-                current_id_state,
-                storage_prompt,
-                gr.Chatbot(type="messages", visible=False),
-                gr.Radio(visible=False),
-            ],
-            js="""
-            () => {
-                return [
-                    localStorage.getItem('zoey_v2_conversations') || '[]',
-                    localStorage.getItem('zoey_v2_current_id') || '',
-                    localStorage.getItem('zoey_v2_system_prompt') || ''
-                ];
-            }
-            """,
-        )
-
         # ── persistence: storage_bridge 变化时写入 localStorage ──
         storage_bridge.change(
             fn=lambda x: x,
@@ -423,6 +401,7 @@ def create_ui() -> gr.Blocks:
                     file_count="multiple",
                     placeholder="输入消息或上传文件（图片/音频）...",
                     sources=["microphone", "upload"],
+                    show_label=False,
                 )
 
                 status_text = gr.Textbox(
@@ -570,6 +549,28 @@ def create_ui() -> gr.Blocks:
                 inputs=[conversations_state, current_id_state, system_prompt],
                 outputs=[conversations_state, chatbot, status_text, storage_bridge],
             )
+
+        # ── 页面加载（必须放在组件定义之后，引用 chatbot/conv_radio） ──
+        block.load(
+            fn=on_page_load,
+            inputs=[storage_bridge, storage_current_id, storage_prompt],
+            outputs=[
+                conversations_state,
+                current_id_state,
+                storage_prompt,
+                chatbot,
+                conv_radio,
+            ],
+            js="""
+            () => {
+                return [
+                    localStorage.getItem('zoey_v2_conversations') || '[]',
+                    localStorage.getItem('zoey_v2_current_id') || '',
+                    localStorage.getItem('zoey_v2_system_prompt') || ''
+                ];
+            }
+            """,
+        )
 
     return block
 
