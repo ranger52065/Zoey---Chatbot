@@ -101,12 +101,23 @@ def process_audio(file_path: str) -> dict | None:
         if not audio_format:
             audio_format = "wav"
 
+        # DashScope 要求 data 字段包含 data URL 前缀
+        mime_map = {
+            "wav": "audio/wav",
+            "mp3": "audio/mpeg",
+            "m4a": "audio/mp4",
+            "aac": "audio/aac",
+            "ogg": "audio/ogg",
+            "flac": "audio/flac",
+        }
+        mime = mime_map.get(audio_format, f"audio/{audio_format}")
         audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+        data_url = f"data:{mime};base64,{audio_base64}"
 
         return {
             "type": "input_audio",
             "input_audio": {
-                "data": audio_base64,
+                "data": data_url,
                 "format": audio_format,
             },
         }
