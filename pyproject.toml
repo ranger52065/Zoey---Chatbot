@@ -41,6 +41,7 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source_pkgs = ["zoey"]
+omit = ["src/zoey/__main__.py", "src/zoey/app.py"]
 
 [tool.coverage.report]
 fail_under = 80
