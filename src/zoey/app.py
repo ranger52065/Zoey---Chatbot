@@ -73,16 +73,14 @@ def _conv_titles(conversations: list[dict]) -> list[str]:
 def _format_error(error: Exception) -> str:
     """格式化错误为友好提示"""
     text = str(error).lower()
-    if "authentication" in text or "invalid" in text or "api_key" in text:
+    print(f"[DEBUG] API 原始错误: {error}")  # 打印原始错误到终端
+    if "authentication" in text or "api_key" in text:
         return "API 密钥无效，请检查 .env 文件中的 DASHSCOPE_API_KEY"
     if "timeout" in text:
         return "请求超时，请检查网络连接"
     if "rate" in text or "limit" in text:
         return "请求过于频繁，请稍后重试"
-    if "audio" in text or "modality" in text:
-        return "该模型不支持音频输入，已自动转为文字处理"
-    # 返回原始错误便于排查
-    return f"{str(error)[:200]}"
+    return f"API 错误: {str(error)[:300]}"
 
 
 # ── 事件处理 ──────────────────────────────────
