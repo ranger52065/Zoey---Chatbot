@@ -471,7 +471,7 @@ def create_ui() -> gr.Blocks:
                     "再点一次确认删除",
                     gr.Button(value="确认删除？", variant="stop", size="sm"),
                     current_id,
-                    gr.Radio(visible=False),
+                    gr.Radio(),
                     "[]",
                 )
 
