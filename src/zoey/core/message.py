@@ -117,7 +117,7 @@ def build_content(user_messages: list[dict]) -> tuple:
 
 
 def validate_input_types(input_types: dict) -> str | None:
-    """验证 qwen-omni-turbo 输入约束
+    """验证 qwen3.5-omni-plus-2026-03-15 输入约束
 
     Returns:
         不合法时返回错误提示文字，合法时返回 None

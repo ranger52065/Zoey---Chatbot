@@ -42,7 +42,7 @@ def stream_chat(
         openai.RateLimitError: 触发限流
     """
     api_params: dict = {
-        "model": "qwen-omni-turbo",
+        "model": "qwen3.5-omni-plus-2026-03-15",
         "messages": [],
         "stream": True,
         "stream_options": {"include_usage": True},

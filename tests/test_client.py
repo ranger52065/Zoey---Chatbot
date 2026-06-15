@@ -120,4 +120,4 @@ class TestStreamChat:
 
         call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs[1]["stream"] is True
-        assert call_kwargs[1]["model"] == "qwen-omni-turbo"
+        assert call_kwargs[1]["model"] == "qwen3.5-omni-plus-2026-03-15"
