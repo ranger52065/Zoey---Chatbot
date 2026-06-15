@@ -457,18 +457,69 @@ def create_ui() -> gr.Blocks:
             outputs=[current_id_state, storage_current_id, chatbot, chat_input, status_text],
         )
 
-        # 删除对话（点击直接删除）
+        # 删除对话（二步确认：第一点击标记，第二点击才删）
+        delete_confirm_state = gr.State(False)
+
+        def on_delete_handler(conversations, current_id, confirmed, msgs, inp):
+            if not confirmed:
+                return (
+                    conversations,
+                    current_id,
+                    True,
+                    msgs,
+                    inp,
+                    "再点一次确认删除",
+                    gr.Button(value="确认删除？", variant="stop", size="sm"),
+                    current_id,
+                    gr.Radio(visible=False),
+                    "[]",
+                )
+
+            # 第二次点击：执行删除
+            conversations = [c for c in conversations if c["id"] != current_id]
+            if not conversations:
+                conv = create_conversation()
+                conversations.append(conv)
+                current_id = conv["id"]
+            else:
+                current_id = conversations[0]["id"]
+
+            current_conv = _find_conv(conversations, current_id)
+            messages = current_conv["messages"] if current_conv else []
+            titles = _conv_titles(conversations)
+
+            return (
+                conversations,
+                current_id,
+                False,
+                messages,
+                "",
+                "已删除",
+                gr.Button(value="🗑 删除当前对话", size="sm"),
+                current_id,
+                gr.Radio(choices=titles, value=current_conv["title"] if current_conv else ""),
+                _serialize(conversations),
+            )
+
         delete_btn.click(
-            fn=on_delete_conversation,
-            inputs=[conversations_state, current_id_state],
+            fn=on_delete_handler,
+            inputs=[
+                conversations_state,
+                current_id_state,
+                delete_confirm_state,
+                chatbot,
+                chat_input,
+            ],
             outputs=[
                 conversations_state,
                 current_id_state,
-                storage_current_id,
+                delete_confirm_state,
                 chatbot,
                 chat_input,
-                conv_radio,
                 status_text,
+                delete_btn,
+                storage_current_id,
+                conv_radio,
                 storage_bridge,
             ],
         )
