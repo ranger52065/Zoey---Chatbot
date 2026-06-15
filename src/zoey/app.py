@@ -124,6 +124,7 @@ def on_new_conversation(conversations: list[dict], current_id: str, system_promp
     return (
         conversations,
         current_id,
+        current_id,
         gr.Radio(choices=titles, value=conv["title"]),
         [],
         "",
@@ -136,8 +137,9 @@ def on_switch_conversation(conversations: list[dict], value: str) -> tuple:
     """切换会话"""
     for c in conversations:
         if c["title"] == value:
-            return (c["id"], c["messages"], "", "就绪")
-    return ("", [], "", "就绪")
+            cid = c["id"]
+            return (cid, cid, c["messages"], "", "就绪")
+    return ("", "", [], "", "就绪")
 
 
 def on_delete_conversation(conversations: list[dict], current_id: str) -> tuple:
@@ -160,6 +162,7 @@ def on_delete_conversation(conversations: list[dict], current_id: str) -> tuple:
 
     return (
         conversations,
+        current_id,
         current_id,
         messages,
         "",
@@ -371,6 +374,30 @@ def create_ui() -> gr.Blocks:
             """,
         )
 
+        # ── persistence: storage_bridge 变化时写入 localStorage ──
+        storage_bridge.change(
+            fn=lambda x: x,
+            inputs=[storage_bridge],
+            outputs=[storage_bridge],
+            js="""
+            (data) => {
+                if (data) localStorage.setItem('zoey_v2_conversations', data);
+                return data;
+            }
+            """,
+        )
+        storage_current_id.change(
+            fn=lambda x: x,
+            inputs=[storage_current_id],
+            outputs=[storage_current_id],
+            js="""
+            (id) => {
+                if (id) localStorage.setItem('zoey_v2_current_id', id);
+                return id;
+            }
+            """,
+        )
+
         # ── 布局 ──
         gr.Markdown("# 🤖 Zoey 多模态 AI 助手")
 
@@ -434,6 +461,7 @@ def create_ui() -> gr.Blocks:
             outputs=[
                 conversations_state,
                 current_id_state,
+                storage_current_id,
                 conv_radio,
                 chatbot,
                 chat_input,
@@ -446,7 +474,7 @@ def create_ui() -> gr.Blocks:
         conv_radio.change(
             fn=on_switch_conversation,
             inputs=[conversations_state, conv_radio],
-            outputs=[current_id_state, chatbot, chat_input, status_text],
+            outputs=[current_id_state, storage_current_id, chatbot, chat_input, status_text],
         )
 
         # 删除对话
@@ -456,6 +484,7 @@ def create_ui() -> gr.Blocks:
             outputs=[
                 conversations_state,
                 current_id_state,
+                storage_current_id,
                 chatbot,
                 chat_input,
                 conv_radio,
