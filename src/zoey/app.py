@@ -1,7 +1,5 @@
 """应用启动 + Gradio UI 构建"""
 
-import os
-
 import gradio as gr
 from dotenv import load_dotenv
 
@@ -13,9 +11,9 @@ def create_ui() -> gr.Blocks:
     with gr.Blocks(title="Zoey AI助手", theme=gr.themes.Soft()) as block:
         gr.Markdown("# Zoey 多模态 AI 助手")
 
-        chatbot = gr.Chatbot(type="messages", height=500, show_copy_button=True)
+        chatbot = gr.Chatbot(type="messages", height=500, show_copy_button=True)  # noqa: F841
 
-        chat_input = gr.MultimodalTextbox(
+        chat_input = gr.MultimodalTextbox(  # noqa: F841
             file_types=["image", ".wav", ".mp3", ".m4a"],
             file_count="multiple",
             placeholder="输入消息或上传文件...",
